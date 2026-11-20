@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Plan invalide" }, { status: 400 });
     }
 
-    const user = findUserByUid(session.uid);
+    const user = await findUserByUid(session.uid);
     const payment = await createPayment({
       uid: session.uid,
       plan,

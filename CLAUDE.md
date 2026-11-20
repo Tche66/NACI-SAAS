@@ -7,7 +7,7 @@ SaaS de predictions pour le Loto Bonheur (LONACI, Cote d'Ivoire).
 ## Stack
 - **Frontend**: Next.js 16 + React 19 + TypeScript + Tailwind CSS 4
 - **Auth**: Custom JWT (bcryptjs + jose) avec cookies httpOnly
-- **Database**: Fichiers JSON locaux (data/users.json, data/access.json)
+- **Database**: Vercel KV (Redis) — users, access, quotas
 - **Paiement**: SaaSPay (Orange Money, MTN MoMo, Wave)
 - **Predictions API**: Express server existant (lonaci-scraper, port 3002)
 - **Deploy**: Vercel (Next.js) + le serveur predictions a part
@@ -31,12 +31,9 @@ lonaci-saas/
         payment/callback/   — Webhook SaaSPay (POST)
     lib/
       auth.ts               — JWT creation/verification, cookies
-      users.ts              — CRUD utilisateurs (JSON file)
-      access.ts             — Controle acces (free=2/jour, 100F/24h, mensuel)
+      users.ts              — CRUD utilisateurs (Vercel KV)
+      access.ts             — Controle acces (Vercel KV, free=2/jour, 100F/24h, mensuel)
       saaspay.ts            — Integration SaaSPay
-  data/
-    users.json              — Comptes utilisateurs (gitignored)
-    access.json             — Acces et quotas (gitignored)
 ```
 
 ## Modele d'acces
@@ -61,6 +58,7 @@ Le serveur Express dans ~/lonaci-scraper fournit:
 ## Env vars
 Copier `.env.example` vers `.env.local` et remplir:
 - JWT_SECRET — secret pour signer les tokens (changer en prod!)
+- KV_URL, KV_REST_API_URL, KV_REST_API_TOKEN — auto-rempli par Vercel KV
 - SAASPAY_API_KEY / SAASPAY_SECRET — cles SaaSPay
 - NEXT_PUBLIC_APP_URL — URL publique du SaaS
 - NEXT_PUBLIC_API_URL — URL du serveur de predictions

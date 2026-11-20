@@ -1,8 +1,5 @@
-import fs from "fs";
-import path from "path";
+import { kv } from "@vercel/kv";
 import crypto from "crypto";
-
-const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 
 export interface User {
   uid: string;
@@ -12,37 +9,20 @@ export interface User {
   createdAt: string;
 }
 
-function ensureDataDir() {
-  const dir = path.dirname(USERS_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, "[]", "utf-8");
-  }
+const userKey = (uid: string) => `user:${uid}`;
+const emailIndex = (email: string) => `email:${email.toLowerCase().trim()}`;
+
+export async function findUserByEmail(email: string): Promise<User | null> {
+  const uid = await kv.get<string>(emailIndex(email));
+  if (!uid) return null;
+  return kv.get<User>(userKey(uid));
 }
 
-function readUsers(): User[] {
-  ensureDataDir();
-  const raw = fs.readFileSync(USERS_FILE, "utf-8");
-  return JSON.parse(raw);
+export async function findUserByUid(uid: string): Promise<User | null> {
+  return kv.get<User>(userKey(uid));
 }
 
-function writeUsers(users: User[]) {
-  ensureDataDir();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
-}
-
-export function findUserByEmail(email: string): User | undefined {
-  return readUsers().find((u) => u.email.toLowerCase() === email.toLowerCase());
-}
-
-export function findUserByUid(uid: string): User | undefined {
-  return readUsers().find((u) => u.uid === uid);
-}
-
-export function createUser(email: string, phone: string, passwordHash: string): User {
-  const users = readUsers();
+export async function createUser(email: string, phone: string, passwordHash: string): Promise<User> {
   const user: User = {
     uid: crypto.randomUUID(),
     email: email.toLowerCase().trim(),
@@ -50,6 +30,7 @@ export function createUser(email: string, phone: string, passwordHash: string): 
     passwordHash,
     createdAt: new Date().toISOString(),
   };
-  writeUsers([...users, user]);
+  await kv.set(userKey(user.uid), user);
+  await kv.set(emailIndex(user.email), user.uid);
   return user;
 }

@@ -14,13 +14,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Mot de passe: 6 caracteres minimum" }, { status: 400 });
     }
 
-    const existing = findUserByEmail(email);
+    const existing = await findUserByEmail(email);
     if (existing) {
       return NextResponse.json({ error: "Ce compte existe deja" }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = createUser(email, phone || "", passwordHash);
+    const user = await createUser(email, phone || "", passwordHash);
     const token = await createSession({ uid: user.uid, email: user.email });
 
     const res = NextResponse.json({ uid: user.uid, email: user.email });

@@ -8,7 +8,7 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  const accessInfo = canAccessPrediction(session.uid);
+  const accessInfo = await canAccessPrediction(session.uid);
 
   return NextResponse.json({
     user: { uid: session.uid, email: session.email },
