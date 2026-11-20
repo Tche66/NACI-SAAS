@@ -11,7 +11,7 @@ export async function GET() {
   const accessInfo = await canAccessPrediction(session.uid);
 
   return NextResponse.json({
-    user: { uid: session.uid, email: session.email },
+    user: { uid: session.uid, phone: session.phone },
     access: accessInfo,
   });
 }

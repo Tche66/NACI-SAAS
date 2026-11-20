@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { findUserByUid } from "@/lib/users";
 import { createPayment } from "@/lib/saaspay";
 
 export async function POST(req: NextRequest) {
@@ -15,12 +14,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Plan invalide" }, { status: 400 });
     }
 
-    const user = await findUserByUid(session.uid);
     const payment = await createPayment({
       uid: session.uid,
       plan,
-      phone: user?.phone,
-      email: session.email,
+      phone: session.phone,
     });
     return NextResponse.json(payment);
   } catch (err: unknown) {

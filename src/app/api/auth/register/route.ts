@@ -1,29 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { findUserByEmail, createUser } from "@/lib/users";
+import { findUserByPhone, createUser } from "@/lib/users";
 import { createSession, sessionCookieOptions } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, phone, password } = await req.json();
+    const { phone, password } = await req.json();
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email et mot de passe requis" }, { status: 400 });
+    if (!phone || !password) {
+      return NextResponse.json({ error: "Numero et mot de passe requis" }, { status: 400 });
     }
     if (password.length < 6) {
       return NextResponse.json({ error: "Mot de passe: 6 caracteres minimum" }, { status: 400 });
     }
 
-    const existing = await findUserByEmail(email);
+    const existing = await findUserByPhone(phone);
     if (existing) {
-      return NextResponse.json({ error: "Ce compte existe deja" }, { status: 409 });
+      return NextResponse.json({ error: "Ce numero est deja inscrit" }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await createUser(email, phone || "", passwordHash);
-    const token = await createSession({ uid: user.uid, email: user.email });
+    const user = await createUser(phone, passwordHash);
+    const token = await createSession({ uid: user.uid, phone: user.phone });
 
-    const res = NextResponse.json({ uid: user.uid, email: user.email });
+    const res = NextResponse.json({ uid: user.uid, phone: user.phone });
     res.cookies.set(sessionCookieOptions(token));
     return res;
   } catch (err: unknown) {

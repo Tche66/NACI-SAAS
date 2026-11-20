@@ -27,7 +27,6 @@ export async function createPayment(params: {
   uid: string;
   plan: "day_pass" | "monthly";
   phone?: string;
-  email?: string;
 }): Promise<PaymentResponse> {
   const amount = params.plan === "day_pass" ? 100 : 2000;
   const description = params.plan === "day_pass"
@@ -39,7 +38,6 @@ export async function createPayment(params: {
     currency: "XOF",
     description,
     customerPhone: params.phone,
-    customerEmail: params.email,
     metadata: {
       uid: params.uid,
       plan: params.plan,

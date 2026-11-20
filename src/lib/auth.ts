@@ -8,7 +8,7 @@ const COOKIE_NAME = "lonaci_session";
 
 export interface SessionPayload {
   uid: string;
-  email: string;
+  phone: string;
 }
 
 export async function createSession(payload: SessionPayload): Promise<string> {
@@ -23,7 +23,7 @@ export async function createSession(payload: SessionPayload): Promise<string> {
 export async function verifySession(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return { uid: payload.uid as string, email: payload.email as string };
+    return { uid: payload.uid as string, phone: payload.phone as string };
   } catch {
     return null;
   }

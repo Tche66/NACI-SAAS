@@ -21,7 +21,7 @@ interface TirageData {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ uid: string; phone: string } | null>(null);
   const [access, setAccess] = useState<AccessInfo | null>(null);
   const [tirages, setTirages] = useState<TirageData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +62,13 @@ export default function DashboardPage() {
     router.push("/login");
   }
 
+  function formatPhone(phone: string): string {
+    if (phone.startsWith("225") && phone.length === 13) {
+      return `+225 ${phone.slice(3, 5)} ${phone.slice(5, 7)} ${phone.slice(7, 9)} ${phone.slice(9, 11)} ${phone.slice(11)}`;
+    }
+    return phone;
+  }
+
   function getNumsForSource(tirage: TirageData): number[] {
     return tirage.sources[selectedSource as keyof typeof tirage.sources] || [];
   }
@@ -80,7 +87,7 @@ export default function DashboardPage() {
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <h1 className="text-lg font-bold text-[#00e676]">LONACI Pro</h1>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9aa0a6]">{user?.email}</span>
+            <span className="text-xs text-[#9aa0a6]">{user ? formatPhone(user.phone) : ""}</span>
             {access && (
               <span className={`text-xs font-semibold px-2 py-1 rounded ${
                 access.plan === "monthly" ? "bg-[#ffd740]/20 text-[#ffd740]" :
