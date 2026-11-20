@@ -1,28 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 export default function PricingPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-    return unsub;
+    fetch("/api/auth/me")
+      .then((r) => { if (r.ok) setIsLoggedIn(true); })
+      .catch(() => {});
   }, []);
 
   async function handlePurchase(plan: "day_pass" | "monthly") {
-    if (!user) { router.push("/login"); return; }
+    if (!isLoggedIn) { router.push("/login"); return; }
     setLoading(plan);
     try {
       const res = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, plan, phone: user.phoneNumber, email: user.email }),
+        body: JSON.stringify({ plan }),
       });
       const data = await res.json();
       if (data.paymentUrl) {
@@ -46,7 +45,6 @@ export default function PricingPage() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {/* Free */}
           <div className="bg-[#1a1d27] border border-[#2d3140] rounded-xl p-6">
             <div className="text-sm font-semibold text-[#9aa0a6] mb-2">GRATUIT</div>
             <div className="text-4xl font-black mb-1">0<span className="text-lg text-[#9aa0a6]">F</span></div>
@@ -58,14 +56,13 @@ export default function PricingPage() {
               <li className="text-[#9aa0a6]">&#10007; Backtest</li>
             </ul>
             <button
-              onClick={() => router.push(user ? "/dashboard" : "/login")}
+              onClick={() => router.push(isLoggedIn ? "/dashboard" : "/login")}
               className="w-full border border-[#2d3140] text-[#9aa0a6] font-semibold py-3 rounded-lg text-sm"
             >
-              {user ? "Aller au dashboard" : "Commencer"}
+              {isLoggedIn ? "Aller au dashboard" : "Commencer"}
             </button>
           </div>
 
-          {/* Day Pass */}
           <div className="bg-[#1a1d27] border-2 border-[#00e676] rounded-xl p-6 relative">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#00e676] text-black text-xs font-bold px-3 py-1 rounded-full">POPULAIRE</div>
             <div className="text-sm font-semibold text-[#00e676] mb-2">PASS 24H</div>
@@ -86,7 +83,6 @@ export default function PricingPage() {
             </button>
           </div>
 
-          {/* Monthly */}
           <div className="bg-[#1a1d27] border border-[#ffd740]/50 rounded-xl p-6">
             <div className="text-sm font-semibold text-[#ffd740] mb-2">MENSUEL</div>
             <div className="text-4xl font-black mb-1">2 000<span className="text-lg text-[#9aa0a6]">F</span></div>

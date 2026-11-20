@@ -6,8 +6,8 @@ SaaS de predictions pour le Loto Bonheur (LONACI, Cote d'Ivoire).
 
 ## Stack
 - **Frontend**: Next.js 16 + React 19 + TypeScript + Tailwind CSS 4
-- **Auth**: Firebase Authentication (telephone + email)
-- **Database**: Firebase Firestore (users, access, bets)
+- **Auth**: Custom JWT (bcryptjs + jose) avec cookies httpOnly
+- **Database**: Fichiers JSON locaux (data/users.json, data/access.json)
 - **Paiement**: SaaSPay (Orange Money, MTN MoMo, Wave)
 - **Predictions API**: Express server existant (lonaci-scraper, port 3002)
 - **Deploy**: Vercel (Next.js) + le serveur predictions a part
@@ -17,22 +17,38 @@ SaaS de predictions pour le Loto Bonheur (LONACI, Cote d'Ivoire).
 lonaci-saas/
   src/
     app/
-      page.tsx            — Landing page (vente)
-      login/page.tsx      — Connexion (tel/email)
-      dashboard/page.tsx  — Dashboard protege
-      pricing/page.tsx    — Tarifs + paiement SaaSPay
-      api/payment/        — Webhooks SaaSPay
+      page.tsx              — Landing page (vente)
+      login/page.tsx        — Connexion email/password
+      dashboard/page.tsx    — Dashboard protege (predictions)
+      pricing/page.tsx      — Tarifs + paiement SaaSPay
+      api/
+        auth/register/      — Inscription (POST)
+        auth/login/         — Connexion (POST)
+        auth/me/            — Session courante (GET)
+        auth/logout/        — Deconnexion (POST)
+        access/consume/     — Consommer une prediction (POST)
+        payment/create/     — Creer paiement SaaSPay (POST)
+        payment/callback/   — Webhook SaaSPay (POST)
     lib/
-      firebase.ts         — Config Firebase
-      access.ts           — Controle acces (free=2/jour, 100F/24h, mensuel)
-      saaspay.ts          — Integration SaaSPay
-    components/           — Composants React
+      auth.ts               — JWT creation/verification, cookies
+      users.ts              — CRUD utilisateurs (JSON file)
+      access.ts             — Controle acces (free=2/jour, 100F/24h, mensuel)
+      saaspay.ts            — Integration SaaSPay
+  data/
+    users.json              — Comptes utilisateurs (gitignored)
+    access.json             — Acces et quotas (gitignored)
 ```
 
 ## Modele d'acces
 - **Gratuit**: 2 predictions par jour, suivi des paris
 - **Pass 24h (100F)**: Predictions illimitees pendant 24h
 - **Mensuel (2000F)**: Tout illimite + backtest + alertes
+
+## Auth
+- Inscription/connexion par email + mot de passe
+- Mot de passe hashe avec bcryptjs (salt 10)
+- Session JWT (jose, HS256, 30 jours) dans cookie httpOnly
+- Pas de dependance externe (pas de Firebase, pas de OAuth provider)
 
 ## API Predictions (backend separe)
 Le serveur Express dans ~/lonaci-scraper fournit:
@@ -43,7 +59,11 @@ Le serveur Express dans ~/lonaci-scraper fournit:
 - POST /api/backtest-custom
 
 ## Env vars
-Copier `.env.example` vers `.env.local` et remplir les cles Firebase + SaaSPay.
+Copier `.env.example` vers `.env.local` et remplir:
+- JWT_SECRET — secret pour signer les tokens (changer en prod!)
+- SAASPAY_API_KEY / SAASPAY_SECRET — cles SaaSPay
+- NEXT_PUBLIC_APP_URL — URL publique du SaaS
+- NEXT_PUBLIC_API_URL — URL du serveur de predictions
 
 ## Dev
 ```bash

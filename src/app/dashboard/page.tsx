@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { canAccessPrediction, consumePrediction, getUserAccess, type UserAccess } from "@/lib/access";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
+interface AccessInfo {
+  allowed: boolean;
+  reason: string;
+  remaining: number;
+  plan: string;
+}
 
 interface TirageData {
   nom: string;
@@ -17,26 +21,23 @@ interface TirageData {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [access, setAccess] = useState<UserAccess | null>(null);
-  const [accessInfo, setAccessInfo] = useState<{ allowed: boolean; reason: string; remaining: number; plan: string } | null>(null);
+  const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
+  const [access, setAccess] = useState<AccessInfo | null>(null);
   const [tirages, setTirages] = useState<TirageData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTirage, setSelectedTirage] = useState<string | null>(null);
+  const [revealedTirages, setRevealedTirages] = useState<Set<string>>(new Set());
   const [selectedSource, setSelectedSource] = useState("lstm");
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { router.push("/login"); return; }
-      setUser(u);
-      const acc = await getUserAccess(u.uid);
-      setAccess(acc);
-      const info = await canAccessPrediction(u.uid);
-      setAccessInfo(info);
-      setLoading(false);
-    });
-    return unsub;
+  const loadSession = useCallback(async () => {
+    const res = await fetch("/api/auth/me");
+    if (!res.ok) { router.push("/login"); return; }
+    const data = await res.json();
+    setUser(data.user);
+    setAccess(data.access);
+    setLoading(false);
   }, [router]);
+
+  useEffect(() => { loadSession(); }, [loadSession]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/tirages-du-jour`)
@@ -46,16 +47,19 @@ export default function DashboardPage() {
   }, []);
 
   async function handleViewPrediction(tirage: TirageData) {
-    if (!user) return;
-    const info = await canAccessPrediction(user.uid);
-    if (!info.allowed) {
-      setAccessInfo(info);
+    const res = await fetch("/api/access/consume", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      setAccess(data.access || access);
       return;
     }
-    await consumePrediction(user.uid);
-    setSelectedTirage(tirage.nom);
-    const updatedInfo = await canAccessPrediction(user.uid);
-    setAccessInfo(updatedInfo);
+    setRevealedTirages((prev) => new Set([...prev, tirage.nom]));
+    setAccess(data.access);
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
   }
 
   function getNumsForSource(tirage: TirageData): number[] {
@@ -72,25 +76,21 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <header className="bg-[#1a1d27] border-b border-[#2d3140] px-4 py-3">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <h1 className="text-lg font-bold text-[#00e676]">LONACI Pro</h1>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9aa0a6]">{user?.email || user?.phoneNumber}</span>
-            {accessInfo && (
+            <span className="text-xs text-[#9aa0a6]">{user?.email}</span>
+            {access && (
               <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                accessInfo.plan === "monthly" ? "bg-[#ffd740]/20 text-[#ffd740]" :
-                accessInfo.plan === "day_pass" ? "bg-[#00e676]/20 text-[#00e676]" :
+                access.plan === "monthly" ? "bg-[#ffd740]/20 text-[#ffd740]" :
+                access.plan === "day_pass" ? "bg-[#00e676]/20 text-[#00e676]" :
                 "bg-[#448aff]/20 text-[#448aff]"
               }`}>
-                {accessInfo.plan === "monthly" ? "PRO" : accessInfo.plan === "day_pass" ? "PASS 24H" : `${accessInfo.remaining}/2 gratuit`}
+                {access.plan === "monthly" ? "PRO" : access.plan === "day_pass" ? "PASS 24H" : `${access.remaining}/2 gratuit`}
               </span>
             )}
-            <button
-              onClick={() => signOut(auth)}
-              className="text-xs text-[#ff5252] hover:underline"
-            >
+            <button onClick={handleLogout} className="text-xs text-[#ff5252] hover:underline">
               Deconnexion
             </button>
           </div>
@@ -98,11 +98,10 @@ export default function DashboardPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* Access banner */}
-        {accessInfo && !accessInfo.allowed && (
+        {access && !access.allowed && (
           <div className="bg-[#ff5252]/10 border border-[#ff5252]/30 rounded-xl p-4 mb-6">
             <div className="font-bold text-[#ff5252] mb-1">Limite atteinte</div>
-            <p className="text-sm text-[#9aa0a6] mb-3">{accessInfo.reason}</p>
+            <p className="text-sm text-[#9aa0a6] mb-3">{access.reason}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => router.push("/pricing")}
@@ -120,7 +119,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Source selector */}
         <div className="flex gap-2 mb-6 flex-wrap">
           {[
             { k: "bot", l: "Bot", c: "#00e676" },
@@ -143,11 +141,10 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Tirages */}
         <div className="space-y-3">
           {tirages.map((t) => {
             const nums = getNumsForSource(t);
-            const isRevealed = selectedTirage === t.nom;
+            const isRevealed = revealedTirages.has(t.nom);
             return (
               <div key={t.nom} className="bg-[#1a1d27] border border-[#2d3140] rounded-xl p-4">
                 <div className="flex justify-between items-center mb-3">
@@ -158,7 +155,7 @@ export default function DashboardPage() {
                   {!isRevealed && (
                     <button
                       onClick={() => handleViewPrediction(t)}
-                      disabled={!accessInfo?.allowed && accessInfo?.remaining === 0}
+                      disabled={!access?.allowed}
                       className="bg-[#00e676] text-black font-bold px-3 py-1.5 rounded-lg text-xs hover:bg-[#69f0ae] disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       Voir prediction

@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (plan === "day_pass") {
-      await activateDayPass(uid);
+      activateDayPass(uid);
     } else if (plan === "monthly") {
-      await activateMonthly(uid);
+      activateMonthly(uid);
     }
 
     return NextResponse.json({ ok: true, message: `Plan ${plan} active pour ${uid}` });

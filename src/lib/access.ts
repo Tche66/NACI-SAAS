@@ -1,5 +1,7 @@
-import { db } from "./firebase";
-import { doc, getDoc, setDoc, updateDoc, increment } from "firebase/firestore";
+import fs from "fs";
+import path from "path";
+
+const ACCESS_FILE = path.join(process.cwd(), "data", "access.json");
 
 export interface UserAccess {
   uid: string;
@@ -17,10 +19,25 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function getUserAccess(uid: string): Promise<UserAccess> {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
+function ensureFile() {
+  const dir = path.dirname(ACCESS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(ACCESS_FILE)) fs.writeFileSync(ACCESS_FILE, "{}", "utf-8");
+}
+
+function readAll(): Record<string, UserAccess> {
+  ensureFile();
+  return JSON.parse(fs.readFileSync(ACCESS_FILE, "utf-8"));
+}
+
+function writeAll(data: Record<string, UserAccess>) {
+  ensureFile();
+  fs.writeFileSync(ACCESS_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+export function getUserAccess(uid: string): UserAccess {
+  const all = readAll();
+  if (!all[uid]) {
     const access: UserAccess = {
       uid,
       plan: "free",
@@ -29,40 +46,38 @@ export async function getUserAccess(uid: string): Promise<UserAccess> {
       dayPassExpires: null,
       monthlyExpires: null,
     };
-    await setDoc(ref, access);
+    all[uid] = access;
+    writeAll(all);
     return access;
   }
-  return snap.data() as UserAccess;
+  return all[uid];
 }
 
-export async function canAccessPrediction(uid: string): Promise<{
+export function canAccessPrediction(uid: string): {
   allowed: boolean;
   reason: string;
   remaining: number;
   plan: string;
-}> {
-  const access = await getUserAccess(uid);
+} {
+  const all = readAll();
+  const access = getUserAccess(uid);
   const today = todayStr();
   const now = new Date().toISOString();
 
-  // Monthly subscriber
   if (access.plan === "monthly" && access.monthlyExpires && access.monthlyExpires > now) {
     return { allowed: true, reason: "Abonnement mensuel actif", remaining: -1, plan: "monthly" };
   }
 
-  // Day pass (100F/24h)
   if (access.plan === "day_pass" && access.dayPassExpires && access.dayPassExpires > now) {
     return { allowed: true, reason: "Pass 24h actif", remaining: -1, plan: "day_pass" };
   }
 
-  // Free tier: reset counter if new day
   if (access.lastPredictionDate !== today) {
-    await updateDoc(doc(db, "users", uid), {
-      predictionsToday: 0,
-      lastPredictionDate: today,
-      plan: "free",
-    });
     access.predictionsToday = 0;
+    access.lastPredictionDate = today;
+    access.plan = "free";
+    all[uid] = access;
+    writeAll(all);
   }
 
   const remaining = FREE_PREDICTIONS_PER_DAY - access.predictionsToday;
@@ -78,29 +93,34 @@ export async function canAccessPrediction(uid: string): Promise<{
   };
 }
 
-export async function consumePrediction(uid: string): Promise<void> {
-  const ref = doc(db, "users", uid);
-  const access = await getUserAccess(uid);
+export function consumePrediction(uid: string): void {
+  const all = readAll();
+  const access = getUserAccess(uid);
   const now = new Date().toISOString();
 
-  // Paid users don't consume
   if (access.plan === "monthly" && access.monthlyExpires && access.monthlyExpires > now) return;
   if (access.plan === "day_pass" && access.dayPassExpires && access.dayPassExpires > now) return;
 
-  await updateDoc(ref, {
-    predictionsToday: increment(1),
-    lastPredictionDate: todayStr(),
-  });
+  access.predictionsToday += 1;
+  access.lastPredictionDate = todayStr();
+  all[uid] = access;
+  writeAll(all);
 }
 
-export async function activateDayPass(uid: string): Promise<void> {
-  const ref = doc(db, "users", uid);
-  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  await updateDoc(ref, { plan: "day_pass", dayPassExpires: expires });
+export function activateDayPass(uid: string): void {
+  const all = readAll();
+  const access = getUserAccess(uid);
+  access.plan = "day_pass";
+  access.dayPassExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  all[uid] = access;
+  writeAll(all);
 }
 
-export async function activateMonthly(uid: string, months: number = 1): Promise<void> {
-  const ref = doc(db, "users", uid);
-  const expires = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString();
-  await updateDoc(ref, { plan: "monthly", monthlyExpires: expires });
+export function activateMonthly(uid: string, months: number = 1): void {
+  const all = readAll();
+  const access = getUserAccess(uid);
+  access.plan = "monthly";
+  access.monthlyExpires = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString();
+  all[uid] = access;
+  writeAll(all);
 }

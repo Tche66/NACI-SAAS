@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 const SAASPAY_API_KEY = process.env.SAASPAY_API_KEY || "";
 const SAASPAY_SECRET = process.env.SAASPAY_SECRET || "";
 const SAASPAY_BASE_URL = process.env.SAASPAY_BASE_URL || "https://api.saaspay.co";
@@ -65,7 +67,6 @@ export async function createPayment(params: {
 }
 
 export function verifyWebhookSignature(payload: string, signature: string): boolean {
-  const crypto = require("crypto");
   const expected = crypto.createHmac("sha256", SAASPAY_SECRET).update(payload).digest("hex");
   return expected === signature;
 }
