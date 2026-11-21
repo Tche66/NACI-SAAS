@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+import { Tabs } from "@/components/Tabs";
+import { TabJouer } from "@/components/TabJouer";
+import { TabMonJeu } from "@/components/TabMonJeu";
+import { TabSemaine } from "@/components/TabSemaine";
+import { TabBacktest } from "@/components/TabBacktest";
 
 interface AccessInfo {
   allowed: boolean;
@@ -12,21 +15,19 @@ interface AccessInfo {
   plan: string;
 }
 
-interface TirageData {
-  nom: string;
-  heure: string;
-  type: string;
-  sources: { bot: number[]; nn: number[]; lstm: number[]; consensus: number[] };
-}
+const TAB_DEFS = [
+  { key: "jouer", label: "Jouer" },
+  { key: "monjeu", label: "Mon Jeu" },
+  { key: "semaine", label: "Semaine" },
+  { key: "backtest", label: "Backtest" },
+];
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ uid: string; phone: string } | null>(null);
   const [access, setAccess] = useState<AccessInfo | null>(null);
-  const [tirages, setTirages] = useState<TirageData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [revealedTirages, setRevealedTirages] = useState<Set<string>>(new Set());
-  const [selectedSource, setSelectedSource] = useState("lstm");
+  const [tab, setTab] = useState("jouer");
 
   const loadSession = useCallback(async () => {
     const res = await fetch("/api/auth/me");
@@ -39,29 +40,6 @@ export default function DashboardPage() {
 
   useEffect(() => { loadSession(); }, [loadSession]);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/tirages-du-jour`)
-      .then((r) => r.json())
-      .then((d) => setTirages(d.tirages || []))
-      .catch(() => {});
-  }, []);
-
-  async function handleViewPrediction(tirage: TirageData) {
-    const res = await fetch("/api/access/consume", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
-      setAccess(data.access || access);
-      return;
-    }
-    setRevealedTirages((prev) => new Set([...prev, tirage.nom]));
-    setAccess(data.access);
-  }
-
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
-
   function formatPhone(phone: string): string {
     if (phone.startsWith("225") && phone.length === 13) {
       return `+225 ${phone.slice(3, 5)} ${phone.slice(5, 7)} ${phone.slice(7, 9)} ${phone.slice(9, 11)} ${phone.slice(11)}`;
@@ -69,8 +47,29 @@ export default function DashboardPage() {
     return phone;
   }
 
-  function getNumsForSource(tirage: TirageData): number[] {
-    return tirage.sources[selectedSource as keyof typeof tirage.sources] || [];
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+
+  const isPremium = access?.plan === "monthly" || access?.plan === "day_pass";
+  const isMonthly = access?.plan === "monthly";
+
+  const tabs = TAB_DEFS.map((t) => ({
+    ...t,
+    locked:
+      (t.key === "semaine" && !isPremium) ||
+      (t.key === "backtest" && !isMonthly),
+  }));
+
+  function handleTabChange(key: string) {
+    if (key === "semaine" && !isPremium) {
+      return;
+    }
+    if (key === "backtest" && !isMonthly) {
+      return;
+    }
+    setTab(key);
   }
 
   if (loading) {
@@ -83,18 +82,22 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-[#1a1d27] border-b border-[#2d3140] px-4 py-3">
+      {/* Header */}
+      <header className="bg-gradient-to-r from-[#1a3a1a] to-[#0d2818] border-b border-[#2d5a2d] px-4 py-3">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <h1 className="text-lg font-bold text-[#00e676]">LONACI Pro</h1>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[#00e676] animate-pulse" />
+            <h1 className="text-lg font-bold text-[#00e676]">LONACI Pro</h1>
+          </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-[#9aa0a6]">{user ? formatPhone(user.phone) : ""}</span>
             {access && (
-              <span className={`text-xs font-semibold px-2 py-1 rounded ${
+              <span className={`text-[10px] font-bold px-2 py-1 rounded ${
                 access.plan === "monthly" ? "bg-[#ffd740]/20 text-[#ffd740]" :
                 access.plan === "day_pass" ? "bg-[#00e676]/20 text-[#00e676]" :
                 "bg-[#448aff]/20 text-[#448aff]"
               }`}>
-                {access.plan === "monthly" ? "PRO" : access.plan === "day_pass" ? "PASS 24H" : `${access.remaining}/2 gratuit`}
+                {access.plan === "monthly" ? "PRO" : access.plan === "day_pass" ? "PASS 24H" : `${access.remaining}/2`}
               </span>
             )}
             <button onClick={handleLogout} className="text-xs text-[#ff5252] hover:underline">
@@ -104,96 +107,55 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-4 py-4">
+        {/* Bannière limite atteinte */}
         {access && !access.allowed && (
-          <div className="bg-[#ff5252]/10 border border-[#ff5252]/30 rounded-xl p-4 mb-6">
-            <div className="font-bold text-[#ff5252] mb-1">Limite atteinte</div>
-            <p className="text-sm text-[#9aa0a6] mb-3">{access.reason}</p>
-            <div className="flex gap-3">
+          <div className="bg-[#ff5252]/10 border border-[#ff5252]/30 rounded-xl p-4 mb-4">
+            <div className="font-bold text-[#ff5252] text-sm mb-1">Limite atteinte</div>
+            <p className="text-xs text-[#9aa0a6] mb-3">{access.reason}</p>
+            <div className="flex gap-2">
               <button
                 onClick={() => router.push("/pricing")}
-                className="bg-[#00e676] text-black font-bold px-4 py-2 rounded-lg text-sm"
+                className="bg-[#00e676] text-black font-bold px-4 py-2 rounded-lg text-xs"
               >
                 Pass 24h — 100F
               </button>
               <button
                 onClick={() => router.push("/pricing")}
-                className="border border-[#ffd740] text-[#ffd740] font-semibold px-4 py-2 rounded-lg text-sm"
+                className="border border-[#ffd740] text-[#ffd740] font-semibold px-4 py-2 rounded-lg text-xs"
               >
-                Abonnement mensuel
+                Mensuel — 2000F
               </button>
             </div>
           </div>
         )}
 
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {[
-            { k: "bot", l: "Bot", c: "#00e676" },
-            { k: "nn", l: "IA Neural", c: "#e040fb" },
-            { k: "lstm", l: "LSTM", c: "#ffab40" },
-            { k: "consensus", l: "Consensus", c: "#18ffff" },
-          ].map((s) => (
+        {/* Bannière upgrade pour gratuit */}
+        {access && access.plan === "free" && access.allowed && (
+          <div className="bg-[#448aff]/5 border border-[#448aff]/20 rounded-xl p-3 mb-4 flex justify-between items-center">
+            <div>
+              <span className="text-xs text-[#448aff] font-bold">Plan gratuit</span>
+              <span className="text-[10px] text-[#9aa0a6] ml-2">
+                {access.remaining} prediction{access.remaining > 1 ? "s" : ""} restante{access.remaining > 1 ? "s" : ""}
+              </span>
+            </div>
             <button
-              key={s.k}
-              onClick={() => setSelectedSource(s.k)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                selectedSource === s.k
-                  ? "text-black"
-                  : "text-[#9aa0a6] border-[#2d3140] hover:border-[#9aa0a6]"
-              }`}
-              style={selectedSource === s.k ? { backgroundColor: s.c, borderColor: s.c } : {}}
+              onClick={() => router.push("/pricing")}
+              className="text-[10px] text-[#ffd740] font-bold hover:underline"
             >
-              {s.l}
+              Passer PRO
             </button>
-          ))}
-        </div>
-
-        <div className="space-y-3">
-          {tirages.map((t) => {
-            const nums = getNumsForSource(t);
-            const isRevealed = revealedTirages.has(t.nom);
-            return (
-              <div key={t.nom} className="bg-[#1a1d27] border border-[#2d3140] rounded-xl p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <span className="text-[#18ffff] text-xs font-bold mr-2">{t.heure}</span>
-                    <span className="font-semibold">{t.nom}</span>
-                  </div>
-                  {!isRevealed && (
-                    <button
-                      onClick={() => handleViewPrediction(t)}
-                      disabled={!access?.allowed}
-                      className="bg-[#00e676] text-black font-bold px-3 py-1.5 rounded-lg text-xs hover:bg-[#69f0ae] disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Voir prediction
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  {nums.slice(0, 5).map((n, i) => (
-                    <div
-                      key={i}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                        isRevealed
-                          ? "bg-gradient-to-br from-[#2e7d32] to-[#43a047] text-white shadow-lg shadow-green-500/30"
-                          : "bg-[#222533] text-[#9aa0a6] border border-[#2d3140]"
-                      }`}
-                    >
-                      {isRevealed ? String(n).padStart(2, "0") : "?"}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {tirages.length === 0 && (
-          <div className="text-center text-[#9aa0a6] py-12">
-            <p>Chargement des tirages...</p>
-            <p className="text-xs mt-2">Verifie que le serveur de predictions tourne sur {API_BASE}</p>
           </div>
         )}
+
+        {/* Tabs */}
+        <Tabs tabs={tabs} active={tab} onChange={handleTabChange} />
+
+        {/* Tab content */}
+        {tab === "jouer" && <TabJouer access={access} onAccessUpdate={setAccess} />}
+        {tab === "monjeu" && <TabMonJeu />}
+        {tab === "semaine" && <TabSemaine />}
+        {tab === "backtest" && <TabBacktest />}
       </div>
     </div>
   );
