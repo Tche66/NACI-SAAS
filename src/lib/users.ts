@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { redis } from "./redis";
 import crypto from "crypto";
 
 export interface User {
@@ -18,13 +18,13 @@ function normalizePhone(phone: string): string {
 }
 
 export async function findUserByPhone(phone: string): Promise<User | null> {
-  const uid = await kv.get<string>(phoneIndex(phone));
+  const uid = await redis.get<string>(phoneIndex(phone));
   if (!uid) return null;
-  return kv.get<User>(userKey(uid));
+  return redis.get<User>(userKey(uid));
 }
 
 export async function findUserByUid(uid: string): Promise<User | null> {
-  return kv.get<User>(userKey(uid));
+  return redis.get<User>(userKey(uid));
 }
 
 export async function createUser(phone: string, passwordHash: string): Promise<User> {
@@ -34,7 +34,7 @@ export async function createUser(phone: string, passwordHash: string): Promise<U
     passwordHash,
     createdAt: new Date().toISOString(),
   };
-  await kv.set(userKey(user.uid), user);
-  await kv.set(phoneIndex(user.phone), user.uid);
+  await redis.set(userKey(user.uid), user);
+  await redis.set(phoneIndex(user.phone), user.uid);
   return user;
 }

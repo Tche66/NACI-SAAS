@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { redis } from "./redis";
 
 export interface UserAccess {
   uid: string;
@@ -18,7 +18,7 @@ function todayStr(): string {
 }
 
 export async function getUserAccess(uid: string): Promise<UserAccess> {
-  const existing = await kv.get<UserAccess>(accessKey(uid));
+  const existing = await redis.get<UserAccess>(accessKey(uid));
   if (existing) return existing;
 
   const access: UserAccess = {
@@ -29,12 +29,12 @@ export async function getUserAccess(uid: string): Promise<UserAccess> {
     dayPassExpires: null,
     monthlyExpires: null,
   };
-  await kv.set(accessKey(uid), access);
+  await redis.set(accessKey(uid), access);
   return access;
 }
 
 async function saveAccess(access: UserAccess): Promise<void> {
-  await kv.set(accessKey(access.uid), access);
+  await redis.set(accessKey(access.uid), access);
 }
 
 export async function canAccessPrediction(uid: string): Promise<{
