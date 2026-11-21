@@ -139,31 +139,34 @@ export function TabJouer({ access, onAccessUpdate }: TabJouerProps) {
           &#9733; {JOURS[jour]} : {jq.lbl}
         </div>
         <div className="flex gap-2 flex-wrap text-xs">
-          <div className="bg-[#222533] p-3 rounded-lg flex-1 min-w-[140px]">
-            <div className="text-[#18ffff] font-bold text-[10px] mb-1">PARI RECOMMANDE</div>
-            <div className="font-semibold text-white">Chance 4+ DC</div>
-            <div className="text-[#9aa0a6] text-[9px] mt-1">4 nums LSTM en Chance 4+ Double Chance</div>
-            <div className="text-[#ffd740] text-[9px] mt-1">ROI +332% sur 6 mois</div>
-          </div>
           {tops.length > 0 && (
             <div className="bg-[#222533] p-3 rounded-lg flex-1 min-w-[140px]">
-              <div className="text-[#00e676] font-bold text-[10px] mb-1">A CIBLER</div>
+              <div className="text-[#00e676] font-bold text-[10px] mb-1">TIRAGES A CIBLER</div>
               <div className="text-white">{tops.join(", ")}</div>
+              <div className="text-[#9aa0a6] text-[9px] mt-1">Meilleurs ROI sur backtest 6 mois</div>
             </div>
           )}
           {eviter.length > 0 && (
             <div className="bg-[#222533] p-3 rounded-lg flex-1 min-w-[140px]">
               <div className="text-[#ff5252] font-bold text-[10px] mb-1">EVITER</div>
               <div className="text-[#9aa0a6]">{eviter.join(", ")}</div>
+              <div className="text-[#9aa0a6] text-[9px] mt-1">0 gain ou perte nette sur 6 mois</div>
             </div>
           )}
+          <div className="bg-[#222533] p-3 rounded-lg flex-1 min-w-[140px]">
+            <div className="text-[#ffd740] font-bold text-[10px] mb-1">MEILLEUR PARI (backtest)</div>
+            <div className="text-white font-semibold">Chance 4+ DC — ROI +951%</div>
+            <div className="text-white text-[9px] mt-0.5">Chance 5+ DC — ROI +207%</div>
+            <div className="text-white text-[9px]">Chance 3+ DC — ROI +166%</div>
+            <div className="text-[#ff5252] text-[9px] mt-1">Standard = toujours perdant</div>
+          </div>
         </div>
         <div className="mt-3 p-2.5 rounded-lg text-[10px] text-[#9aa0a6] border border-[#448aff]/15 bg-[#448aff]/5">
-          <span className="font-bold text-[#448aff]">Strategie :</span> Joue les{" "}
-          <span className="font-bold text-[#ffab40]">4 premiers LSTM</span> en{" "}
-          <span className="font-bold">Chance 4+ DC</span> (100F). Joue{" "}
-          <span className="font-bold">seulement</span> les tirages ou il y a un{" "}
-          <span className="font-bold text-[#18ffff]">vote</span> (numero en commun entre 2+ sources).
+          <span className="font-bold text-[#448aff]">Strategie :</span>{" "}
+          Joue <span className="font-bold">uniquement en Double Chance</span> (le standard est perdant).{" "}
+          Choisis les tirages marques <span className="font-bold text-[#00e676]">TOP</span>.{" "}
+          Utilise les nums <span className="font-bold text-[#ffab40]">LSTM</span> ou <span className="font-bold text-[#18ffff]">Consensus</span>.{" "}
+          Consulte l&apos;onglet <span className="font-bold text-white">Suivi</span> pour le classement complet.
         </div>
       </div>
 

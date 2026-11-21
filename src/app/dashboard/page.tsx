@@ -6,6 +6,7 @@ import { Tabs } from "@/components/Tabs";
 import { TabJouer } from "@/components/TabJouer";
 import { TabMonJeu } from "@/components/TabMonJeu";
 import { TabSemaine } from "@/components/TabSemaine";
+import { TabSuivi } from "@/components/TabSuivi";
 import { TabBacktest } from "@/components/TabBacktest";
 
 interface AccessInfo {
@@ -18,6 +19,7 @@ interface AccessInfo {
 const TAB_DEFS = [
   { key: "jouer", label: "Jouer" },
   { key: "monjeu", label: "Mon Jeu" },
+  { key: "suivi", label: "Suivi" },
   { key: "semaine", label: "Semaine" },
   { key: "backtest", label: "Backtest" },
 ];
@@ -154,6 +156,7 @@ export default function DashboardPage() {
         {/* Tab content */}
         {tab === "jouer" && <TabJouer access={access} onAccessUpdate={setAccess} />}
         {tab === "monjeu" && <TabMonJeu />}
+        {tab === "suivi" && <TabSuivi />}
         {tab === "semaine" && <TabSemaine />}
         {tab === "backtest" && <TabBacktest />}
       </div>
