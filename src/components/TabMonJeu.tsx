@@ -62,11 +62,22 @@ interface ByEntry {
   wins: number;
 }
 
+interface AccessInfo {
+  allowed: boolean;
+  reason: string;
+  remaining: number;
+  plan: string;
+}
+
+interface TabMonJeuProps {
+  access: AccessInfo | null;
+}
+
 function fmtF(n: number): string {
   return n.toLocaleString("fr-FR") + " F";
 }
 
-export function TabMonJeu() {
+export function TabMonJeu({ access }: TabMonJeuProps) {
   const [tirages, setTirages] = useState<Tirage[]>([]);
   const [bets, setBets] = useState<Bet[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -97,6 +108,7 @@ export function TabMonJeu() {
 
   useEffect(() => { loadData(); }, []);
 
+  const isPremium = access?.plan === "monthly" || access?.plan === "day_pass";
   const typePari = TYPES_PARIS.find((t) => t.k === selType);
   const selectedTirageData = tirages.find((t) => t.nom === selTirage);
   const previewNums = selectedTirageData
@@ -319,7 +331,7 @@ export function TabMonJeu() {
           </div>
         </div>
 
-        {/* Preview nums */}
+        {/* Preview nums — masques pour les gratuits */}
         {selTirage && previewNums.length > 0 && (
           <div className="mb-3 p-3 bg-[#222533] rounded-lg">
             <div className="text-[9px] text-[#9aa0a6] mb-2">
@@ -327,18 +339,23 @@ export function TabMonJeu() {
             </div>
             <div className="flex gap-1.5">
               {previewNums.map((n, i) => (
-                <NumBall key={i} num={n} variant="green" size="sm" />
+                <NumBall key={i} num={n} variant={isPremium ? "green" : "hidden"} size="sm" />
               ))}
             </div>
+            {!isPremium && (
+              <div className="text-[9px] text-[#ffab40] mt-2">
+                Numeros masques — passe au Pass 24h ou PRO pour voir les predictions
+              </div>
+            )}
           </div>
         )}
 
         <button
           onClick={placerPari}
-          disabled={placing || !selTirage || previewNums.length === 0}
+          disabled={placing || !selTirage || previewNums.length === 0 || !isPremium}
           className="w-full bg-[#00e676] text-black font-bold py-2.5 rounded-lg text-sm hover:bg-[#69f0ae] disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {placing ? "..." : `Placer le pari — ${selMise}F`}
+          {placing ? "..." : !isPremium ? "Passer PRO pour placer des paris" : `Placer le pari — ${selMise}F`}
         </button>
         {msg && (
           <div className={`text-xs mt-2 text-center ${msg.includes("place") || msg.includes("GAGNE") ? "text-[#00e676]" : "text-[#ff5252]"}`}>

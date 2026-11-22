@@ -99,7 +99,7 @@ export default function DashboardPage() {
                 access.plan === "day_pass" ? "bg-[#00e676]/20 text-[#00e676]" :
                 "bg-[#448aff]/20 text-[#448aff]"
               }`}>
-                {access.plan === "monthly" ? "PRO" : access.plan === "day_pass" ? "PASS 24H" : `${access.remaining}/2`}
+                {access.plan === "monthly" ? "PRO" : access.plan === "day_pass" ? "PASS 24H" : `${access.remaining}/4`}
               </span>
             )}
             <button onClick={handleLogout} className="text-xs text-[#ff5252] hover:underline">
@@ -155,7 +155,7 @@ export default function DashboardPage() {
 
         {/* Tab content */}
         {tab === "jouer" && <TabJouer access={access} onAccessUpdate={setAccess} />}
-        {tab === "monjeu" && <TabMonJeu />}
+        {tab === "monjeu" && <TabMonJeu access={access} />}
         {tab === "suivi" && <TabSuivi />}
         {tab === "semaine" && <TabSemaine />}
         {tab === "backtest" && <TabBacktest />}

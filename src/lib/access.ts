@@ -9,7 +9,7 @@ export interface UserAccess {
   monthlyExpires: string | null;
 }
 
-const FREE_PREDICTIONS_PER_DAY = 2;
+const FREE_PREDICTIONS_PER_DAY = 4;
 const accessKey = (uid: string) => `access:${uid}`;
 
 function todayStr(): string {
