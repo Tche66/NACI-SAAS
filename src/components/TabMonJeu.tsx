@@ -13,11 +13,12 @@ const SOURCES = [
 ];
 
 const TYPES_PARIS = [
-  { k: "chance5", l: "Chance 5", mise: 100 },
-  { k: "chance4", l: "Chance 4", mise: 100 },
-  { k: "chance3", l: "Chance 3", mise: 100 },
-  { k: "chance4dc", l: "Chance 4+ DC", mise: 100 },
-  { k: "chance3dc", l: "Chance 3+ DC", mise: 100 },
+  { k: "chance5dc", l: "Chance 5+ DC", pick: 5, mise: 100 },
+  { k: "chance4dc", l: "Chance 4+ DC", pick: 4, mise: 100 },
+  { k: "chance3dc", l: "Chance 3+ DC", pick: 3, mise: 100 },
+  { k: "chance5", l: "Chance 5", pick: 5, mise: 100 },
+  { k: "chance4", l: "Chance 4", pick: 4, mise: 100 },
+  { k: "chance3", l: "Chance 3", pick: 3, mise: 100 },
 ];
 
 interface Tirage {
@@ -26,16 +27,23 @@ interface Tirage {
   sources: { bot: number[]; nn: number[]; lstm: number[]; consensus: number[] };
 }
 
-interface Pari {
+interface Bet {
   id: string;
   tirage: string;
-  type: string;
+  mode: string;
+  modeLabel?: string;
   source: string;
   nums: number[];
   mise: number;
   date: string;
-  status: "pending" | "won" | "lost";
+  resolved: boolean;
   gain?: number;
+  net?: number;
+  hitsGagnants?: number;
+  hitsMachine?: number;
+  totalHits?: number;
+  resultat?: number[];
+  machine?: number[];
 }
 
 interface Stats {
@@ -47,64 +55,101 @@ interface Stats {
   nbWins: number;
 }
 
+interface ByEntry {
+  mise: number;
+  gain: number;
+  count: number;
+  wins: number;
+}
+
 function fmtF(n: number): string {
   return n.toLocaleString("fr-FR") + " F";
 }
 
 export function TabMonJeu() {
   const [tirages, setTirages] = useState<Tirage[]>([]);
-  const [paris, setParis] = useState<Pari[]>([]);
+  const [bets, setBets] = useState<Bet[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [bySource, setBySource] = useState<Record<string, ByEntry>>({});
+  const [byTirage, setByTirage] = useState<Record<string, ByEntry>>({});
   const [pending, setPending] = useState(0);
   const [selTirage, setSelTirage] = useState("");
   const [selSource, setSelSource] = useState("lstm");
   const [selType, setSelType] = useState("chance4dc");
+  const [selMise, setSelMise] = useState(100);
   const [placing, setPlacing] = useState(false);
   const [msg, setMsg] = useState("");
+  const [showStats, setShowStats] = useState(false);
 
-  useEffect(() => {
+  function loadData() {
     Promise.all([
       fetch(`${API}/api/tirages-du-jour`).then((r) => r.json()),
       fetch(`${API}/api/mes-paris`).then((r) => r.json()),
     ]).then(([tData, pData]) => {
       setTirages(tData.tirages || []);
-      setParis(pData.paris || []);
+      setBets(pData.bets || []);
       setStats(pData.stats || null);
+      setBySource(pData.bySource || {});
+      setByTirage(pData.byTirage || {});
       setPending(pData.pending || 0);
     }).catch(() => {});
-  }, []);
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  const typePari = TYPES_PARIS.find((t) => t.k === selType);
+  const selectedTirageData = tirages.find((t) => t.nom === selTirage);
+  const previewNums = selectedTirageData
+    ? (selectedTirageData.sources[selSource as keyof typeof selectedTirageData.sources] || []).slice(0, typePari?.pick || 4)
+    : [];
 
   async function placerPari() {
     if (!selTirage) { setMsg("Choisis un tirage"); return; }
+    if (previewNums.length === 0) { setMsg("Pas de numeros disponibles"); return; }
     setPlacing(true);
     setMsg("");
     try {
       const res = await fetch(`${API}/api/placer-pari`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tirage: selTirage, source: selSource, type: selType }),
+        body: JSON.stringify({
+          tirage: selTirage,
+          source: selSource,
+          mode: selType,
+          mise: selMise,
+          nums: previewNums,
+        }),
       });
       const data = await res.json();
       if (data.error) { setMsg(data.error); }
       else {
-        setMsg("Pari place !");
-        const pData = await fetch(`${API}/api/mes-paris`).then((r) => r.json());
-        setParis(pData.paris || []);
-        setStats(pData.stats || null);
-        setPending(pData.pending || 0);
+        setMsg(`Pari place ! ${data.bet?.resolved ? (data.bet.gain > 0 ? "GAGNE +" + fmtF(data.bet.gain) : "Perdu") : "En attente de resultat"}`);
+        loadData();
       }
     } catch { setMsg("Erreur serveur"); }
     setPlacing(false);
   }
 
+  async function supprimerPari(id: string) {
+    await fetch(`${API}/api/supprimer-pari/${id}`, { method: "DELETE" });
+    loadData();
+  }
+
   const roiColor = stats && parseFloat(stats.roi) > 0 ? "#00e676" : stats && parseFloat(stats.roi) < 0 ? "#ff5252" : "#9aa0a6";
+
+  const recentBets = [...bets].reverse().slice(0, 50);
 
   return (
     <div>
       {/* Stats portfolio */}
-      {stats && (
+      {stats && stats.nbParis > 0 && (
         <div className="bg-[#1a1d27] border border-[#2d3140] rounded-xl p-4 mb-4">
-          <div className="text-[#ffd740] text-xs font-bold mb-3">&#128176; Mon Portefeuille</div>
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-[#ffd740] text-xs font-bold">&#128176; Mon Portefeuille</div>
+            <button onClick={() => setShowStats(!showStats)} className="text-[9px] text-[#18ffff] hover:underline">
+              {showStats ? "Masquer details" : "Voir details"}
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             <div className="bg-[#222533] rounded-lg p-3 text-center">
               <div className="text-lg font-extrabold text-[#ff5252]">{fmtF(stats.totalMise)}</div>
@@ -134,6 +179,52 @@ export function TabMonJeu() {
           {pending > 0 && (
             <div className="mt-2 text-center text-[10px] text-[#ffab40]">{pending} paris en attente de resultat</div>
           )}
+
+          {/* Stats detaillees par source */}
+          {showStats && Object.keys(bySource).length > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#2d3140]">
+              <div className="text-[10px] text-[#9aa0a6] font-bold mb-2">PAR SOURCE</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(bySource).map(([src, s]) => {
+                  const roi = s.mise > 0 ? ((s.gain / s.mise - 1) * 100).toFixed(0) : "0";
+                  const col = parseFloat(roi) > 0 ? "#00e676" : "#ff5252";
+                  return (
+                    <div key={src} className="bg-[#222533] rounded-lg p-2 text-center min-w-[70px]">
+                      <div className="text-[9px] font-bold text-[#9aa0a6]">{src.toUpperCase()}</div>
+                      <div className="text-sm font-bold" style={{ color: col }}>{parseInt(roi) > 0 ? "+" : ""}{roi}%</div>
+                      <div className="text-[8px] text-[#9aa0a6]">{s.wins}/{s.count} gagnes</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Stats detaillees par tirage */}
+          {showStats && Object.keys(byTirage).length > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#2d3140]">
+              <div className="text-[10px] text-[#9aa0a6] font-bold mb-2">PAR TIRAGE</div>
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                {Object.entries(byTirage)
+                  .sort(([, a], [, b]) => (b.gain - b.mise) - (a.gain - a.mise))
+                  .map(([tirage, s]) => {
+                    const net = s.gain - s.mise;
+                    const col = net > 0 ? "#00e676" : "#ff5252";
+                    return (
+                      <div key={tirage} className="flex items-center justify-between bg-[#222533] rounded px-2 py-1.5">
+                        <span className="text-[10px] font-semibold">{tirage}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[9px] text-[#9aa0a6]">{s.wins}/{s.count}</span>
+                          <span className="text-[10px] font-bold" style={{ color: col }}>
+                            {net >= 0 ? "+" : ""}{fmtF(net)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -154,7 +245,7 @@ export function TabMonJeu() {
                     : "border-[#2d3140] bg-[#222533] text-white hover:border-[#00e676]"
                 }`}
               >
-                <span className="text-[#18ffff]">{t.heure}</span> {t.nom}
+                <span className={selTirage === t.nom ? "text-black" : "text-[#18ffff]"}>{t.heure}</span> {t.nom}
               </button>
             ))}
           </div>
@@ -181,81 +272,179 @@ export function TabMonJeu() {
         <div className="mb-3">
           <div className="text-[10px] text-[#18ffff] font-bold mb-2">3. TYPE DE PARI</div>
           <div className="flex flex-wrap gap-1">
-            {TYPES_PARIS.map((tp) => (
+            {TYPES_PARIS.map((tp) => {
+              const isDC = tp.k.includes("dc");
+              return (
+                <button
+                  key={tp.k}
+                  onClick={() => setSelType(tp.k)}
+                  className={`text-[10px] px-3 py-1 rounded border font-bold transition-all ${
+                    selType === tp.k
+                      ? "bg-[#ffd740] text-black border-[#ffd740]"
+                      : "text-[#9aa0a6] border-[#2d3140] hover:border-[#ffd740]"
+                  }`}
+                >
+                  {tp.l}
+                  {isDC && <span className="ml-1 text-[8px]">★</span>}
+                </button>
+              );
+            })}
+          </div>
+          {!selType.includes("dc") && (
+            <div className="text-[9px] text-[#ff5252] mt-1">Le standard est perdant — Double Chance (DC) recommande</div>
+          )}
+        </div>
+
+        <div className="mb-3">
+          <div className="text-[10px] text-[#18ffff] font-bold mb-2">4. MISE</div>
+          <div className="flex items-center gap-2">
+            {[100, 200, 500, 1000].map((m) => (
               <button
-                key={tp.k}
-                onClick={() => setSelType(tp.k)}
+                key={m}
+                onClick={() => setSelMise(m)}
                 className={`text-[10px] px-3 py-1 rounded border font-bold transition-all ${
-                  selType === tp.k
-                    ? "bg-[#ffd740] text-black border-[#ffd740]"
-                    : "text-[#9aa0a6] border-[#2d3140] hover:border-[#ffd740]"
+                  selMise === m ? "bg-[#448aff] text-white border-[#448aff]" : "text-[#9aa0a6] border-[#2d3140]"
                 }`}
               >
-                {tp.l} ({tp.mise}F)
+                {m}F
               </button>
             ))}
+            <input
+              type="number"
+              value={selMise}
+              onChange={(e) => setSelMise(Math.max(25, parseInt(e.target.value) || 100))}
+              min={25}
+              className="w-20 bg-[#222533] border border-[#2d3140] rounded px-2 py-1 text-[10px] text-white focus:border-[#00e676] outline-none"
+            />
           </div>
         </div>
 
         {/* Preview nums */}
-        {selTirage && (
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-[10px] text-[#9aa0a6]">Numeros :</span>
-            <div className="flex gap-1">
-              {(tirages.find((t) => t.nom === selTirage)?.sources[selSource as keyof Tirage["sources"]] || [])
-                .slice(0, selType.includes("5") ? 5 : selType.includes("4") ? 4 : 3)
-                .map((n, i) => (
-                  <NumBall key={i} num={n} variant="green" size="sm" />
-                ))}
+        {selTirage && previewNums.length > 0 && (
+          <div className="mb-3 p-3 bg-[#222533] rounded-lg">
+            <div className="text-[9px] text-[#9aa0a6] mb-2">
+              {typePari?.l} • {selSource.toUpperCase()} • {selMise}F
+            </div>
+            <div className="flex gap-1.5">
+              {previewNums.map((n, i) => (
+                <NumBall key={i} num={n} variant="green" size="sm" />
+              ))}
             </div>
           </div>
         )}
 
         <button
           onClick={placerPari}
-          disabled={placing || !selTirage}
+          disabled={placing || !selTirage || previewNums.length === 0}
           className="w-full bg-[#00e676] text-black font-bold py-2.5 rounded-lg text-sm hover:bg-[#69f0ae] disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {placing ? "..." : "Placer le pari"}
+          {placing ? "..." : `Placer le pari — ${selMise}F`}
         </button>
-        {msg && <div className={`text-xs mt-2 text-center ${msg.includes("place") ? "text-[#00e676]" : "text-[#ff5252]"}`}>{msg}</div>}
+        {msg && (
+          <div className={`text-xs mt-2 text-center ${msg.includes("place") || msg.includes("GAGNE") ? "text-[#00e676]" : "text-[#ff5252]"}`}>
+            {msg}
+          </div>
+        )}
       </div>
 
       {/* Historique des paris */}
-      {paris.length > 0 && (
+      {recentBets.length > 0 && (
         <div className="bg-[#1a1d27] border border-[#2d3140] rounded-xl p-4">
-          <div className="text-xs font-bold mb-3">&#128203; Historique ({paris.length})</div>
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {paris.slice(0, 30).map((p) => (
-              <div key={p.id} className="bg-[#222533] rounded-lg p-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold">{p.tirage}</div>
-                  <div className="text-[9px] text-[#9aa0a6]">
-                    {p.type} • {p.source} • {p.date}
+          <div className="text-xs font-bold mb-3">&#128203; Historique ({bets.length} paris)</div>
+          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+            {recentBets.map((b) => {
+              const isWon = b.resolved && (b.gain || 0) > 0;
+              const isLost = b.resolved && (b.gain || 0) === 0;
+              const isPending = !b.resolved;
+              return (
+                <div key={b.id} className="bg-[#222533] rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="text-xs font-semibold">{b.tirage}</div>
+                      <div className="text-[9px] text-[#9aa0a6]">
+                        {b.modeLabel || b.mode} • {b.source} • {b.date} • {fmtF(b.mise)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isWon ? "bg-[#00e676]/20 text-[#00e676]" :
+                        isLost ? "bg-[#ff5252]/20 text-[#ff5252]" :
+                        "bg-[#ffab40]/20 text-[#ffab40]"
+                      }`}>
+                        {isWon ? `GAGNE +${fmtF(b.gain || 0)}` : isLost ? "PERDU" : "EN ATTENTE"}
+                      </div>
+                      {isPending && (
+                        <button
+                          onClick={() => supprimerPari(b.id)}
+                          className="text-[9px] text-[#ff5252] hover:underline"
+                        >
+                          &#10005;
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-1 mt-1">
-                    {p.nums.map((n, i) => (
-                      <NumBall key={i} num={n} variant={p.status === "won" ? "hit" : p.status === "lost" ? "miss" : "orange"} size="sm" />
-                    ))}
+
+                  {/* Nums predits */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-[#9aa0a6] min-w-[35px]">Predit</span>
+                    <div className="flex gap-1">
+                      {b.nums.map((n, i) => {
+                        let variant: "green" | "hit" | "orange" | "close" | "miss" = "green";
+                        if (b.resolved && b.resultat) {
+                          const isExact = b.resultat.includes(n);
+                          const isMachine = !isExact && (b.machine || []).includes(n);
+                          if (isExact) variant = "hit";
+                          else if (isMachine) variant = "orange";
+                          else {
+                            let isClose = false;
+                            for (const r of b.resultat) {
+                              if (Math.abs(r - n) <= 2) { isClose = true; break; }
+                            }
+                            variant = isClose ? "close" : "miss";
+                          }
+                        }
+                        return <NumBall key={i} num={n} variant={variant} size="sm" />;
+                      })}
+                    </div>
+                    {b.resolved && (
+                      <span className="text-[10px] ml-auto">
+                        <span className="text-[#00e676] font-bold">{b.hitsGagnants || 0}g</span>
+                        {(b.hitsMachine || 0) > 0 && <span className="text-[#18ffff]"> +{b.hitsMachine}m</span>}
+                      </span>
+                    )}
                   </div>
+
+                  {/* Resultat reel */}
+                  {b.resolved && b.resultat && (
+                    <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[#2d3140]">
+                      <span className="text-[9px] text-[#9aa0a6] min-w-[35px]">Sorti</span>
+                      <div className="flex gap-1">
+                        {b.resultat.map((n, i) => (
+                          <NumBall key={i} num={n} variant="green" size="sm" />
+                        ))}
+                        {b.machine && b.machine.length > 0 && (
+                          <>
+                            <span className="text-[#9aa0a6] text-[9px] mx-0.5">|</span>
+                            {b.machine.map((n, i) => (
+                              <NumBall key={`m${i}`} num={n} variant="orange" size="sm" />
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-right">
-                  <div className={`text-sm font-bold ${
-                    p.status === "won" ? "text-[#00e676]" : p.status === "lost" ? "text-[#ff5252]" : "text-[#ffab40]"
-                  }`}>
-                    {p.status === "won" ? `+${fmtF(p.gain || 0)}` : p.status === "lost" ? `-${fmtF(p.mise)}` : "En attente"}
-                  </div>
-                  <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded mt-1 inline-block ${
-                    p.status === "won" ? "bg-[#00e676]/20 text-[#00e676]" :
-                    p.status === "lost" ? "bg-[#ff5252]/20 text-[#ff5252]" :
-                    "bg-[#ffab40]/20 text-[#ffab40]"
-                  }`}>
-                    {p.status === "won" ? "GAGNE" : p.status === "lost" ? "PERDU" : "PENDING"}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {bets.length === 0 && (
+        <div className="text-center text-[#9aa0a6] py-8">
+          <p className="text-2xl mb-2">&#127922;</p>
+          <p className="text-sm">Aucun pari encore</p>
+          <p className="text-xs mt-1">Place ton premier pari ci-dessus</p>
         </div>
       )}
     </div>

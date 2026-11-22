@@ -67,6 +67,23 @@ interface TabJouerProps {
   onAccessUpdate: (a: AccessInfo) => void;
 }
 
+function loadRevealed(): Set<string> {
+  try {
+    const stored = localStorage.getItem("lonaci_revealed");
+    if (!stored) return new Set();
+    const parsed = JSON.parse(stored);
+    if (parsed.date !== new Date().toDateString()) return new Set();
+    return new Set(parsed.noms || []);
+  } catch { return new Set(); }
+}
+
+function saveRevealed(noms: Set<string>) {
+  localStorage.setItem("lonaci_revealed", JSON.stringify({
+    date: new Date().toDateString(),
+    noms: [...noms],
+  }));
+}
+
 export function TabJouer({ access, onAccessUpdate }: TabJouerProps) {
   const [jour, setJour] = useState(new Date().getDay());
   const [tirages, setTirages] = useState<Tirage[]>([]);
@@ -74,6 +91,10 @@ export function TabJouer({ access, onAccessUpdate }: TabJouerProps) {
   const [source, setSource] = useState("lstm");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setRevealed(loadRevealed());
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -94,7 +115,9 @@ export function TabJouer({ access, onAccessUpdate }: TabJouerProps) {
       if (data.access) onAccessUpdate(data.access);
       return;
     }
-    setRevealed((prev) => new Set([...prev, nom]));
+    const next = new Set([...revealed, nom]);
+    setRevealed(next);
+    saveRevealed(next);
     if (data.access) onAccessUpdate(data.access);
   }
 
